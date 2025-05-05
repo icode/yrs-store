@@ -2,6 +2,13 @@
 name = "yrs-store"
 version = "0.1.0"
 edition = "2024"
+description = "Simple store layer over Yrs documents"
+license = "MIT"
+authors = ["icode<intelligentcodemail@gmail.com>"]
+keywords = ["crdt", "yrs", "persistence", "store"]
+homepage = "https://github.com/icode/yrs-store"
+repository = "https://github.com/icode/yrs-store"
+readme = "./README.md"
 
 [dependencies]
 bytes = "1.10.1"
