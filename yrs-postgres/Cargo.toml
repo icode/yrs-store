@@ -1,0 +1,20 @@
+[package]
+name = "yrs-postgres"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytes = "1.10.1"
+chrono = { version = "0.4", features = ["serde"] }
+futures-util = "0.3.31"
+sqlx = { version = "0.8", default-features = false, features = ["postgres", "chrono", "runtime-tokio"] }
+async-stream = "0.3.6"
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
+yrs = { version = "0.23", features = ["sync", "weak"] }
+async-trait = "0.1.88"
+
+yrs-store = { version = "0.1", path = "../yrs-store" }
+
+[dev-dependencies]
+sqlx = { version = "0.8", default-features = false, features = ["macros", "postgres"] }
+serde_json = "1.0.140"
