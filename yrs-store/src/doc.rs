@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use std::collections::HashMap;
 use yrs::error::{Error, UpdateError};
 use yrs::updates::decoder::Decode;
@@ -8,9 +7,9 @@ use yrs::{
 };
 
 pub trait ForStore {
-    fn get_update(&self) -> Bytes;
-    fn diff_state_update(&self, state: &Bytes) -> Result<Bytes, Error>;
-    fn apply_update(&self, txn: &mut TransactionMut, update: &Bytes) -> Result<(), UpdateError>;
+    fn get_update(&self) -> Vec<u8>;
+    fn diff_state_update(&self, state: &Vec<u8>) -> Result<Vec<u8>, Error>;
+    fn apply_update(&self, txn: &mut TransactionMut, update: &Vec<u8>) -> Result<(), UpdateError>;
     fn roots(&self, txn: &Transaction<'static>) -> HashMap<String, Out>;
     fn observe<F>(&self, f: F) -> Result<Subscription, TransactionAcqError>
     where
@@ -18,19 +17,19 @@ pub trait ForStore {
 }
 
 impl ForStore for Doc {
-    fn get_update(&self) -> Bytes {
+    fn get_update(&self) -> Vec<u8> {
         self.transact()
             .encode_state_as_update_v1(&StateVector::default())
             .into()
     }
 
-    fn diff_state_update(&self, state: &Bytes) -> Result<Bytes, Error> {
+    fn diff_state_update(&self, state: &Vec<u8>) -> Result<Vec<u8>, Error> {
         let state_vector = StateVector::decode_v1(&state.as_ref())?;
         let update = self.transact().encode_state_as_update_v1(&state_vector);
         Ok(update.into())
     }
 
-    fn apply_update(&self, txn: &mut TransactionMut, update: &Bytes) -> Result<(), UpdateError> {
+    fn apply_update(&self, txn: &mut TransactionMut, update: &Vec<u8>) -> Result<(), UpdateError> {
         let u = Update::decode_v1(update.as_ref()).unwrap();
         txn.apply_update(u)
     }

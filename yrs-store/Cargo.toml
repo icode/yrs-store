@@ -1,6 +1,6 @@
 [package]
 name = "yrs-store"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Simple store layer over Yrs documents"
 license = "MIT"
@@ -11,8 +11,6 @@ repository = "https://github.com/icode/yrs-store"
 readme = "./README.md"
 
 [dependencies]
-bytes = "1.10.1"
 futures-util = "0.3.31"
-sqlx = { version = "0.8", default-features = false }
 yrs = { version = "0.23", features = ["sync", "weak"] }
 async-trait = "0.1.88"

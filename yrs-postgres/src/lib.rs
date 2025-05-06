@@ -1,6 +1,5 @@
 use async_stream;
 use async_trait::async_trait;
-use bytes::Bytes;
 use chrono::NaiveDateTime;
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
@@ -33,6 +32,10 @@ impl PostgresStorage {
     }
 }
 
+fn map_sqlx_err(error: sqlx::Error) -> StoreError {
+    StoreError::StorageError(Box::new(error))
+}
+
 #[async_trait]
 impl Store for PostgresStorage {
     async fn delete(&self) -> Result<(), StoreError> {
@@ -44,10 +47,10 @@ impl Store for PostgresStorage {
         .execute(&self.pool)
         .await
         .map(|_| ())
-        .map_err(StoreError::SqlxError)
+        .map_err(map_sqlx_err)
     }
 
-    async fn write(&self, update: &Bytes) -> Result<(), StoreError> {
+    async fn write(&self, update: &Vec<u8>) -> Result<(), StoreError> {
         let document_id = self.document_id.clone();
         let now = chrono::Utc::now().naive_utc();
         let query_result = sqlx::query(&format!(
@@ -55,11 +58,11 @@ impl Store for PostgresStorage {
             self.table_name
         ))
         .bind(document_id)
-        .bind(update.as_ref())
+        .bind(update)
         .bind(now)
         .execute(&self.pool)
         .await
-        .map_err(StoreError::SqlxError)?;
+        .map_err(map_sqlx_err)?;
 
         let rows_affected = query_result.rows_affected();
 
@@ -74,7 +77,7 @@ impl Store for PostgresStorage {
         Ok(())
     }
 
-    async fn read(&self) -> Result<BoxStream<Result<(Bytes, i64), StoreError>>, StoreError> {
+    async fn read(&self) -> Result<BoxStream<Result<(Vec<u8>, i64), StoreError>>, StoreError> {
         let document_id = self.document_id;
         let table_name = self.table_name.clone();
         let pool = self.pool.clone();
@@ -89,9 +92,8 @@ impl Store for PostgresStorage {
                 .bind(document_id)
                 .fetch(&pool);
 
-            while let Some(row) = rows.try_next().await.map_err(StoreError::SqlxError)? {
-                let payload_vec: Vec<u8> = row.get("payload");
-                let payload = payload_vec.into();
+            while let Some(row) = rows.try_next().await.map_err(map_sqlx_err)? {
+                let payload: Vec<u8> = row.get("payload");
                 let timestamp_ndt: NaiveDateTime = row.get("timestamp");
                 let timestamp_ms = timestamp_ndt.and_utc().timestamp_millis();
                 yield Ok((payload, timestamp_ms));
@@ -101,7 +103,7 @@ impl Store for PostgresStorage {
         Ok(Box::pin(stream))
     }
 
-    async fn read_payloads(&self) -> Result<BoxStream<Result<Bytes, StoreError>>, StoreError> {
+    async fn read_payloads(&self) -> Result<BoxStream<Result<Vec<u8>, StoreError>>, StoreError> {
         let document_id = self.document_id;
         let table_name = self.table_name.clone();
         let pool = self.pool.clone();
@@ -116,9 +118,8 @@ impl Store for PostgresStorage {
                 .bind(document_id)
                 .fetch(&pool);
 
-            while let Some(row) = rows.try_next().await.map_err(StoreError::SqlxError)? {
-                let payload_vec: Vec<u8> = row.get("payload");
-                let payload = payload_vec.into();
+            while let Some(row) = rows.try_next().await.map_err(map_sqlx_err)? {
+                let payload: Vec<u8> = row.get("payload");
                 yield Ok(payload);
             }
         };
@@ -129,7 +130,7 @@ impl Store for PostgresStorage {
     async fn squash(&self) -> Result<(), StoreError> {
         let doc = Doc::new();
         self.load(&doc).await?;
-        let tx = self.pool.begin().await.map_err(StoreError::SqlxError)?;
+        let tx = self.pool.begin().await.map_err(map_sqlx_err)?;
         sqlx::query(&format!(
             "DELETE FROM {} WHERE document_id = $1",
             self.table_name
@@ -137,20 +138,20 @@ impl Store for PostgresStorage {
         .bind(self.document_id)
         .execute(&self.pool)
         .await
-        .map_err(StoreError::SqlxError)?;
+        .map_err(map_sqlx_err)?;
 
         let squashed_update = doc.get_update();
         self.write(&squashed_update).await?;
 
         // 如果在事务超出范围之前都未调用，rollback则自动调用
-        tx.commit().await.map_err(StoreError::SqlxError)?;
+        tx.commit().await.map_err(map_sqlx_err)?;
 
         if self.run_vacuum {
             // 回收死行占据的存储空间
             sqlx::query(&format!("VACUUM {}", self.table_name))
                 .execute(&self.pool)
                 .await
-                .map_err(StoreError::SqlxError)?;
+                .map_err(map_sqlx_err)?;
         }
         Ok(())
     }
